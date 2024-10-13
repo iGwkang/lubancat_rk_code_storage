@@ -2,7 +2,7 @@
 # set -v
 
 DEVICE=linux-lubancat-g++
-SCRIPT_PATH=$(pwd)
+SCRIPT_PATH=$PWD
 
 #源码包名称，5.15版本使用qt-everywhere-opensource-src，其他的是qt-everywhere-src
 MAJOR_NAME=qt-everywhere-src
@@ -10,7 +10,7 @@ MAJOR_NAME_1=qt-everywhere-opensource-src
 
 #修改需要下载源码版本的前缀和后缀,我们默认使用5.15.8
 OPENSRC_VER_PREFIX=5.15
-OPENSRC_VER_SUFFIX=.8
+OPENSRC_VER_SUFFIX=.15
 
 #无需修改--自动组合下载版本
 OPENSRC_VER=${OPENSRC_VER_PREFIX}${OPENSRC_VER_SUFFIX}
@@ -19,14 +19,16 @@ OPENSRC_VER=${OPENSRC_VER_PREFIX}${OPENSRC_VER_SUFFIX}
 PACKAGE_NAME=${MAJOR_NAME}-${OPENSRC_VER_PREFIX}${OPENSRC_VER_SUFFIX}
 
 #定义编译后安装--生成的文件,文件夹位置路径
-INSTALL_PATH_EXT=/opt/${PACKAGE_NAME}/ext
-INSTALL_PATH_HOST=/opt/${PACKAGE_NAME}/host
+#INSTALL_PATH_EXT=$PWD/build/${PACKAGE_NAME}/ext
+#INSTALL_PATH_HOST=$PWD/build/${PACKAGE_NAME}/host
+INSTALL_PATH=${SCRIPT_PATH}/build/${PACKAGE_NAME}
 
 #定义sysroot目录,需根据自己实际放的位置确认，这个默认设置在~/sysroot下
-SYSROOT_PATH=~/sysroot
+SYSROOT_PATH=${SCRIPT_PATH}/sysroot
 
 #添加交叉编译工具链路径，根据前面交叉编译器安装的路径设置
-CROSS_CHAIN_PREFIX=/opt/gcc-aarch64-linux-gnu-8.3.0/bin/aarch64-linux-gnu-
+CROSS_CHAIN_PREFIX=${SCRIPT_PATH}/gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
+#CROSS_CHAIN_PREFIX=aarch64-linux-gnu-
 
 #定义压缩包名称
 COMPRESS_PACKAGE=${MAJOR_NAME}-${OPENSRC_VER_PREFIX}${OPENSRC_VER_SUFFIX}.tar.xz
@@ -54,7 +56,7 @@ do_download_src () {
 
      if [ ! -f "${COMPRESS_PACKAGE}" ];then
          if [ ! -d "${PACKAGE_NAME}" ];then
-             wget -c ${DOWNLOAD_LINK}
+             wget -c ${DOWNLOAD_LINK} -O ${COMPRESS_PACKAGE}
          fi
      fi
 
@@ -70,51 +72,51 @@ do_tar_package () {
      echo "\033[1;33mdone...\033[0m"
 }
 
+
 #创建和修改配置平台
 do_config_before () {
-     echo "\033[1;33mstart configure platform...\033[0m"
-     cd ${PACKAGE_NAME}
+    echo "\033[1;33mstart configure platform...\033[0m"
+    cd ${PACKAGE_NAME}
+	mkdir -p ${CONFIG_PATH}
 
-     if [ ! -d "${CONFIG_PATH}" ];then
-         cp -a ${SCRIPT_PATH}/${PACKAGE_NAME}/qtbase/mkspecs/devices/linux-generic-g++ ${CONFIG_PATH}
-     fi
+	echo "#include \"../../linux-g++/qplatformdefs.h\"" >> ${CONFIG_PATH}/qplatformdefs.h
 
-     echo "#" > ${CONFIG_FILE}
-     echo "# qmake configuration for the LubanCat running Linux for debian10 " >> ${CONFIG_FILE}
-     echo "#" >> ${CONFIG_FILE}
-     echo "" >> ${CONFIG_FILE}
-     echo "include(../common/linux_device_pre.conf)" >> ${CONFIG_FILE}
-     echo "" >> ${CONFIG_FILE}
-     echo "QMAKE_LIBS_EGL         += -lEGL -lmali" >> ${CONFIG_FILE}
-     echo "QMAKE_LIBS_OPENGL_ES2  += -lGLESv2 -lEGL -lmali" >> ${CONFIG_FILE}
-     echo "QMAKE_CFLAGS            = -march=armv8-a" >> ${CONFIG_FILE}
-     echo "QMAKE_CXXFLAGS          = \$\$QMAKE_CFLAGS" >> ${CONFIG_FILE}
-     echo "QMAKE_LFLAGS += -static-libstdc++" >> ${CONFIG_FILE}
-     echo "" >> ${CONFIG_FILE}
+    echo "#" > ${CONFIG_FILE}
+    echo "# qmake configuration for the LubanCat running , Linux for debian10 " >> ${CONFIG_FILE}
+    echo "#" >> ${CONFIG_FILE}
+    echo "" >> ${CONFIG_FILE}
+    echo "include(../common/linux_device_pre.conf)" >> ${CONFIG_FILE}
+    echo "" >> ${CONFIG_FILE}
+    echo "QMAKE_LIBS_EGL         += -lGLESv2 -lEGL -lmali -L${SYSROOT_PATH}/usr/lib -L${SYSROOT_PATH}/usr/lib/aarch64-linux-gnu" >> ${CONFIG_FILE}
+    echo "QMAKE_LIBS_OPENGL_ES2  += -lGLESv2 -lEGL -lmali -L${SYSROOT_PATH}/usr/lib -L${SYSROOT_PATH}/usr/lib/aarch64-linux-gnu" >> ${CONFIG_FILE}
+    echo "QMAKE_CFLAGS            += -march=armv8-a -I${SYSROOT_PATH}/usr/include -I${SYSROOT_PATH}/usr/include/aarch64-linux-gnu" >> ${CONFIG_FILE}
+    echo "QMAKE_CXXFLAGS          += \$\$QMAKE_CFLAGS" >> ${CONFIG_FILE}
+    echo "QMAKE_LFLAGS += -L${SYSROOT_PATH}/usr/lib -L${SYSROOT_PATH}/usr/lib/aarch64-linux-gnu" >> ${CONFIG_FILE}
+    echo "" >> ${CONFIG_FILE}
 
-     echo "QMAKE_INCDIR_POST += \
-         \$\$[QT_SYSROOT]/usr/include \
-         \$\$[QT_SYSROOT]/usr/include/\$\${GCC_MACHINE_DUMP} " >> ${CONFIG_FILE}
 
-     echo "QMAKE_LIBDIR_POST += \
-         \$\$[QT_SYSROOT]/usr/lib \
-         \$\$[QT_SYSROOT]/lib/\$\${GCC_MACHINE_DUMP} \
-         \$\$[QT_SYSROOT]/usr/lib/\$\${GCC_MACHINE_DUMP} " >> ${CONFIG_FILE}
+    echo "QMAKE_INCDIR_POST += \
+    \$\$[QT_SYSROOT]/usr/include \
+    \$\$[QT_SYSROOT]/usr/include/aarch64-linux-gnu " >> ${CONFIG_FILE}
 
-     echo "QMAKE_RPATHLINKDIR_POST += \
-         \$\$[QT_SYSROOT]/usr/lib \
-         \$\$[QT_SYSROOT]/usr/lib/\$\${GCC_MACHINE_DUMP} \
-         \$\$[QT_SYSROOT]/lib/\$\${GCC_MACHINE_DUMP} " >> ${CONFIG_FILE}
+    echo "QMAKE_LIBDIR_POST += \
+        \$\$[QT_SYSROOT]/usr/lib \
+        \$\$[QT_SYSROOT]/lib/aarch64-linux-gnu \
+        \$\$[QT_SYSROOT]/usr/lib/aarch64-linux-gnu " >> ${CONFIG_FILE}
 
-     echo "" >> ${CONFIG_FILE}
-     echo "DISTRO_OPTS += aarch64" >> ${CONFIG_FILE}
-     echo "DISTRO_OPTS += deb-multi-arch" >> ${CONFIG_FILE}
-     echo "" >> ${CONFIG_FILE}
-     echo "include(../common/linux_arm_device_post.conf)" >> ${CONFIG_FILE}
-     echo "load(qt_config)" >> ${CONFIG_FILE}
+    echo "QMAKE_RPATHLINKDIR_POST += \
+        \$\$[QT_SYSROOT]/usr/lib \
+        \$\$[QT_SYSROOT]/usr/lib/aarch64-linux-gnu \
+        \$\$[QT_SYSROOT]/lib/aarch64-linux-gnu " >> ${CONFIG_FILE}
+    
+    echo "DISTRO_OPTS += aarch64" >> ${CONFIG_FILE}
+    echo "DISTRO_OPTS += deb-multi-arch" >> ${CONFIG_FILE}
+    echo "" >> ${CONFIG_FILE}
+    echo "include(../common/linux_arm_device_post.conf)" >> ${CONFIG_FILE}
+    echo "load(qt_config)" >> ${CONFIG_FILE}
 
-     cat ${CONFIG_FILE}
-     echo "\033[1;33mdone...\033[0m"
+    cat ${CONFIG_FILE}
+    echo "done..."
 }
 
 #配置选项
@@ -122,8 +124,8 @@ do_configure () {
      echo "\033[1;33mstart configure ${PACKAGE_NAME}...\033[0m"
      ./configure \
      -sysroot ${SYSROOT_PATH}  \
-     -hostprefix ${INSTALL_PATH_HOST} \
-     -extprefix ${INSTALL_PATH_EXT} \
+     -extprefix ${INSTALL_PATH} \
+     -hostprefix ${INSTALL_PATH} \
      -device ${DEVICE} \
      -device-option CROSS_COMPILE=${CROSS_CHAIN_PREFIX} \
      -release \
@@ -141,8 +143,7 @@ do_configure () {
      -fontconfig \
      -pkg-config \
      -skip qtscript \
-     -skip qtwebengine  \
-     -no-use-gold-linker  \
+     -skip qtwebengine \
      -v \
      -recheck-all
      echo "\033[1;33mdone...\033[0m"
@@ -155,7 +156,7 @@ do_make_install () {
      if [ ! -d "${CONFIG_PATH}" ];then
          cd ${PACKAGE_NAME}
      fi
-     make -j4 && make install
+     make -j24 && make install
      echo "\033[1;33mdone...\033[0m"
 }
 
@@ -180,7 +181,7 @@ do_config_before
 do_configure
 
 # 编译，安装qt
-#do_make_install
+do_make_install
 
 # 删除文件
 #do_delete_file
